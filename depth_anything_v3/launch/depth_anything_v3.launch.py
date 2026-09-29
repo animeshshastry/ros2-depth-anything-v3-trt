@@ -33,13 +33,13 @@ def generate_launch_description():
     
     input_image_topic_arg = DeclareLaunchArgument(
         'input_image_topic',
-        default_value='/camera/image_raw',
+        default_value='/hires_front_color/image_rect',
         description='Input image topic (supports raw and compressed via image_transport)'
     )
     
     input_camera_info_topic_arg = DeclareLaunchArgument(
         'input_camera_info_topic',
-        default_value='/camera/camera_info',
+        default_value='/hires_front_color/camera_info',
         description='Input camera info topic'
     )
     

@@ -56,6 +56,7 @@ public:
     double sky_depth_cap{};             // Cap for sky depth fill-in
     int point_cloud_downsample_factor{};  // Only publish every Nth point (1 = no downsampling)
     bool colorize_point_cloud{};  // Add RGB colors from input image to point cloud
+    bool publish_point_cloud{};  // Whether to publish point cloud or not
   };
 
 private:

@@ -56,10 +56,6 @@ DepthAnythingV3Node::DepthAnythingV3Node(const rclcpp::NodeOptions & node_option
   using std::placeholders::_1;
   using std::placeholders::_2;
   
-  // Parameter
-  set_param_res_ =
-    this->add_on_set_parameters_callback(std::bind(&DepthAnythingV3Node::onSetParam, this, _1));
-  
   node_param_.onnx_path = ament_index_cpp::get_package_share_directory("depth_anything_v3") + "/" + declare_parameter<std::string>(
     "onnx_path", "models/DA3METRIC-LARGE.fp16-batch1.engine");
   node_param_.precision = declare_parameter<std::string>("precision", "fp16");
@@ -76,10 +72,18 @@ DepthAnythingV3Node::DepthAnythingV3Node(const rclcpp::NodeOptions & node_option
   node_param_.sky_depth_cap = declare_parameter<double>("sky_depth_cap", 200.0);
   
   // Point cloud parameters
+  node_param_.publish_point_cloud = declare_parameter<bool>("publish_point_cloud", true);
   node_param_.point_cloud_downsample_factor = declare_parameter<int>("point_cloud_downsample_factor", 10);
   node_param_.colorize_point_cloud = declare_parameter<bool>("colorize_point_cloud", true);
-  RCLCPP_INFO(get_logger(), "Point cloud downsampling factor: %d (publishing every %dth point)", 
-    node_param_.point_cloud_downsample_factor, node_param_.point_cloud_downsample_factor);
+
+    // Parameter
+  set_param_res_ =
+    this->add_on_set_parameters_callback(std::bind(&DepthAnythingV3Node::onSetParam, this, _1));
+  
+  if (node_param_.publish_point_cloud) {
+    RCLCPP_INFO(get_logger(), "Point cloud downsampling factor: %d (publishing every %dth point)", 
+      node_param_.point_cloud_downsample_factor, node_param_.point_cloud_downsample_factor);
+  }
 
   RCLCPP_INFO(get_logger(), "Using model file: %s", node_param_.onnx_path.c_str());
 
@@ -94,28 +98,33 @@ DepthAnythingV3Node::DepthAnythingV3Node(const rclcpp::NodeOptions & node_option
   }
   const auto resolved_camera_info_topic = this->get_node_topics_interface()->resolve_topic_name("~/input/camera_info");
 
+  auto qos_reliable = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
+
   sub_image_.subscribe(
-    this, image_base_topic, image_transport, rclcpp::SensorDataQoS().get_rmw_qos_profile());
+    this, image_base_topic, image_transport, qos_reliable.get_rmw_qos_profile());
   sub_camera_info_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::CameraInfo>>(
-    this, resolved_camera_info_topic, rclcpp::SensorDataQoS().get_rmw_qos_profile());
+    this, resolved_camera_info_topic, qos_reliable.get_rmw_qos_profile());
   
   // Use approximate time synchronizer with 100ms tolerance
   sync_ = std::make_shared<message_filters::Synchronizer<ApproxSyncPolicy>>(
-    ApproxSyncPolicy(10), sub_image_, *sub_camera_info_);
+    ApproxSyncPolicy(50), sub_image_, *sub_camera_info_);
   sync_->registerCallback(std::bind(&DepthAnythingV3Node::onImageCameraInfo, this, _1, _2));
   
-  RCLCPP_INFO(get_logger(), "Using ApproximateTime synchronizer with queue size 10");
+  RCLCPP_INFO(get_logger(), "Using ApproximateTime synchronizer with queue size 50");
 
   // Debug callbacks to check if individual topics are arriving. The image one
   // registers on sub_image_; a second subscription would decode every frame again.
   sub_image_.registerCallback(std::bind(&DepthAnythingV3Node::onImageDebug, this, _1));
   debug_camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(
-    resolved_camera_info_topic, rclcpp::SensorDataQoS(),
+    resolved_camera_info_topic, qos_reliable,
     std::bind(&DepthAnythingV3Node::onCameraInfoDebug, this, std::placeholders::_1));
 
   // Publishers
   pub_depth_image_ = create_publisher<sensor_msgs::msg::Image>("~/output/depth_image", 1);
-  pub_point_cloud_ = create_publisher<sensor_msgs::msg::PointCloud2>("~/output/point_cloud", 1);
+  if (node_param_.publish_point_cloud) {
+    pub_point_cloud_ = create_publisher<sensor_msgs::msg::PointCloud2>("~/output/point_cloud", 1);
+  }
+  // pub_point_cloud_ = create_publisher<sensor_msgs::msg::PointCloud2>("~/output/point_cloud", 1);
   
   if (node_param_.enable_debug) {
     pub_depth_image_debug_ = create_publisher<sensor_msgs::msg::Image>(
@@ -200,7 +209,7 @@ void DepthAnythingV3Node::onImageCameraInfo(
     return;
   }
 
-  RCLCPP_DEBUG(this->get_logger(), "Inference completed in %.3f ms", inference_time_sec * 1000.0);
+  RCLCPP_INFO(this->get_logger(), "Inference completed in %.3f ms", inference_time_sec * 1000.0);
 
   // Get depth image result
   const cv::Mat& depth_image = tensorrt_depth_anything_->getDepthImage();
@@ -212,10 +221,12 @@ void DepthAnythingV3Node::onImageCameraInfo(
   cv_img_depth.header = image_msg->header;
   pub_depth_image_->publish(*cv_img_depth.toImageMsg());
 
-  // Publish point cloud
-  sensor_msgs::msg::PointCloud2 point_cloud = tensorrt_depth_anything_->getPointCloud();
-  point_cloud.header = image_msg->header;
-  pub_point_cloud_->publish(point_cloud);
+  if (node_param_.publish_point_cloud) {
+    // Publish point cloud
+    sensor_msgs::msg::PointCloud2 point_cloud = tensorrt_depth_anything_->getPointCloud();
+    point_cloud.header = image_msg->header;
+    pub_point_cloud_->publish(point_cloud);
+  }
 
   // Publish debug depth image if enabled
   if (node_param_.enable_debug && pub_depth_image_debug_) {
@@ -295,6 +306,7 @@ rcl_interfaces::msg::SetParametersResult DepthAnythingV3Node::onSetParam(
     update_param(params, "sky_depth_cap", p.sky_depth_cap);
     update_param(params, "point_cloud_downsample_factor", p.point_cloud_downsample_factor);
     update_param(params, "colorize_point_cloud", p.colorize_point_cloud);
+    update_param(params, "publish_point_cloud", p.publish_point_cloud);
     
     // Apply runtime-configurable model parameters
     if (tensorrt_depth_anything_) {
