@@ -65,16 +65,16 @@ DepthAnythingV3Node::DepthAnythingV3Node(const rclcpp::NodeOptions & node_option
   node_param_.debug_colormap = declare_parameter<std::string>("debug_colormap", "JET");
   node_param_.debug_filepath = declare_parameter<std::string>(
     "debug_filepath", "/tmp/depth_anything_v3_debug/");
-  node_param_.write_colormap = declare_parameter<bool>("write_colormap", true);
+  node_param_.write_colormap = declare_parameter<bool>("write_colormap", false);
   node_param_.debug_colormap_min_depth = declare_parameter<double>("debug_colormap_min_depth", 2.0);
   node_param_.debug_colormap_max_depth = declare_parameter<double>("debug_colormap_max_depth", 100.0);
   node_param_.sky_threshold = declare_parameter<double>("sky_threshold", 0.3);
   node_param_.sky_depth_cap = declare_parameter<double>("sky_depth_cap", 200.0);
   
   // Point cloud parameters
-  node_param_.publish_point_cloud = declare_parameter<bool>("publish_point_cloud", true);
+  node_param_.publish_point_cloud = declare_parameter<bool>("publish_point_cloud", false);
   node_param_.point_cloud_downsample_factor = declare_parameter<int>("point_cloud_downsample_factor", 10);
-  node_param_.colorize_point_cloud = declare_parameter<bool>("colorize_point_cloud", true);
+  node_param_.colorize_point_cloud = declare_parameter<bool>("colorize_point_cloud", false);
 
     // Parameter
   set_param_res_ =
@@ -209,7 +209,7 @@ void DepthAnythingV3Node::onImageCameraInfo(
     return;
   }
 
-  RCLCPP_INFO(this->get_logger(), "Inference completed in %.3f ms", inference_time_sec * 1000.0);
+  // RCLCPP_INFO(this->get_logger(), "Inference completed in %.3f ms", inference_time_sec * 1000.0);
 
   // Get depth image result
   const cv::Mat& depth_image = tensorrt_depth_anything_->getDepthImage();
@@ -355,18 +355,18 @@ void DepthAnythingV3Node::onImageDebug(const sensor_msgs::msg::Image::ConstShare
 {
   static int image_count = 0;
   image_count++;
-  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, 
-    "[DEBUG] Received image #%d, encoding: %s, size: %ux%u, timestamp: %d.%09d", 
-    image_count, msg->encoding.c_str(), msg->width, msg->height, msg->header.stamp.sec, msg->header.stamp.nanosec);
+  // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, 
+  //   "[DEBUG] Received image #%d, encoding: %s, size: %ux%u, timestamp: %d.%09d", 
+  //   image_count, msg->encoding.c_str(), msg->width, msg->height, msg->header.stamp.sec, msg->header.stamp.nanosec);
 }
 
 void DepthAnythingV3Node::onCameraInfoDebug(const sensor_msgs::msg::CameraInfo::ConstSharedPtr & msg)
 {
   static int camera_info_count = 0;
   camera_info_count++;
-  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-    "[DEBUG] Received camera info #%d, frame: %s, timestamp: %d.%09d", 
-    camera_info_count, msg->header.frame_id.c_str(), msg->header.stamp.sec, msg->header.stamp.nanosec);
+  // RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+  //   "[DEBUG] Received camera info #%d, frame: %s, timestamp: %d.%09d", 
+  //   camera_info_count, msg->header.frame_id.c_str(), msg->header.stamp.sec, msg->header.stamp.nanosec);
 }
 
 } // namespace depth_anything_v3

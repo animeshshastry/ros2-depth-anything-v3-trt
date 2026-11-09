@@ -14,9 +14,9 @@ depth_anything_v3:
     sky_threshold: 0.3               # Threshold for sky classification (lower = more sky)
     sky_depth_cap: 200.0             # Maximum depth value to fill sky regions
     
-    publish_point_cloud: true
+    publish_point_cloud: false
     # Point cloud downsampling (1 = no downsampling, 10 = every 10th point)
     point_cloud_downsample_factor: 2
     
     # Point cloud colorization with RGB from input image
-    colorize_point_cloud: true  # Set to true to publish RGB point cloud instead of XYZ only
+    colorize_point_cloud: false  # Set to true to publish RGB point cloud instead of XYZ only
